@@ -397,9 +397,6 @@ hass --script check_config --config "$HA_CONFIG_DIR"
 Main logs:
 
 ```sh
-# In Debian; the path depends on the selected directory:
-tail -f "$HA_CONFIG_DIR/home-assistant.log"
-
 # In Termux after installing the step 04 script:
 tail -f ~/init.log
 
