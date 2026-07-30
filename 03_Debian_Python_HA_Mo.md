@@ -123,36 +123,67 @@ su -c 'mount | grep /mnt/media_rw'
 
 We record the actual UUID from the directory name or `blkid`. If `/mnt/media_rw/<UUID>` is absent, **we stop**: we do not layer a manual mount of the same block device over Android’s mount. First, we determine whether the ROM supports this card type and why `vold` did not mount it.
 
-### A.5. Create the directory and bind mount
+### A.5. Create and verify the HA configuration mount
 
-Once the UUID is known, we run the following in Termux and use the actual UUID:
+Once the UUID is known, we run the following in Termux and use the actual UUID. Every command in this subsection uses Magisk’s `-mm` (`--mount-master`) option, so the mount is created and inspected in the global mount namespace. This must match the context used by the step 04 startup script.
 
 ```sh
 # Set the actual UUID:
 export SD_UUID='paste_SD_UUID_here'
 
+# Always use the master mount namespace.
 # Create the HA configuration directory on the card:
-su -c "mkdir -p /mnt/media_rw/$SD_UUID/ha_config"
+su -mm -c "mkdir -p /mnt/media_rw/$SD_UUID/ha_config"
 
 # Create the mount point inside the Debian chroot:
-su -c 'mkdir -p /data/local/chroot-distro/debian/mnt/ha_native'
+su -mm -c 'mkdir -p /data/local/chroot-distro/debian/mnt/ha_native'
 
 # Expose the card directory to Debian (bind mount):
-su -c "mount --bind /mnt/media_rw/$SD_UUID/ha_config /data/local/chroot-distro/debian/mnt/ha_native"
+su -mm -c "mount --bind /mnt/media_rw/$SD_UUID/ha_config /data/local/chroot-distro/debian/mnt/ha_native"
 ```
 
-We verify the bind mount:
+We verify the bind mount both in the global namespace and from Debian. A successful `touch` alone is not sufficient: the mount must be visible from the chroot that runs HA.
 
 ```sh
-su -c 'mount | grep ha_native'
-su -c '/system/bin/chroot-distro command debian "touch /mnt/ha_native/.write-test && ls -la /mnt/ha_native"'
+su -mm -c 'mount | grep ha_native'
+su -mm -c '/system/bin/chroot-distro command debian "mount | grep ha_native"'
+su -mm -c '/system/bin/chroot-distro command debian "ls -la /mnt/ha_native"'
+su -mm -c '/system/bin/chroot-distro command debian "touch /mnt/ha_native/.write-test && ls -la /mnt/ha_native"'
 ```
 
 After the check, we remove the test file:
 
 ```sh
-su -c '/system/bin/chroot-distro command debian "rm -f /mnt/ha_native/.write-test"'
+su -mm -c '/system/bin/chroot-distro command debian "rm -f /mnt/ha_native/.write-test"'
 ```
+
+#### Optional: migrate an existing HA configuration to the SD card
+
+We perform this migration only when HA was already initialized with its configuration in the Debian root directory, for example when `/data/local/chroot-distro/debian/root/configuration.yaml` and `/data/local/chroot-distro/debian/root/.storage` exist. We stop HA first. The commands below copy the known HA configuration files, state storage, and database to the mounted SD directory without deleting the original files.
+
+In Termux, we enter Debian through the master mount namespace:
+
+```sh
+su -mm -c '/system/bin/chroot-distro login debian'
+```
+
+In Debian, we run:
+
+```sh
+pkill -TERM -f '[s]rv/homeassistant/bin/hass' || true
+cp -a /root/configuration.yaml /root/.storage /mnt/ha_native/
+for item in automations.yaml scripts.yaml scenes.yaml secrets.yaml custom_components www blueprints packages themes home-assistant_v2.db home-assistant_v2.db-shm home-assistant_v2.db-wal; do
+    [ -e "/root/$item" ] && cp -a "/root/$item" /mnt/ha_native/
+done
+ls -la /mnt/ha_native
+export UV_LINK_MODE=copy
+export UV_CONSTRAINT=/srv/homeassistant/constraints.txt
+source /srv/homeassistant/bin/activate
+hass --script check_config --config /mnt/ha_native
+exit
+```
+
+If the existing HA configuration is stored in another directory, we copy that directory’s contents instead; we do not copy the entire Debian `/root` directory blindly. This migration applies to an existing HA installation after the Python environment from section B is available. Before enabling step 04, we confirm that `check_config` succeeds and that the expected configuration and `.storage` are present on the SD-backed directory.
 
 This mount disappears after a reboot. The step 04 script restores it **only** when `USE_SD_CARD=1` and the UUID is set.
 
@@ -290,7 +321,6 @@ hass --script check_config --config "$HA_CONFIG_DIR"
 ```
 
 
-
 We manually start HA and confirm that the web interface opens after a restart. We do not continue to step 04 until this is confirmed.
 
 ## D. Optional: local Mosquitto in Termux
@@ -301,9 +331,6 @@ We leave Debian (`exit`) and run the following in regular Termux:
 
 ```sh
 pkg install -y mosquitto
-```
-
-```sh
 mkdir -p ~/.config/mosquitto ~/.local/share/mosquitto
 chmod 700 ~/.config/mosquitto ~/.local/share/mosquitto
 mosquitto_passwd -c ~/.config/mosquitto/passwd homeassistant
