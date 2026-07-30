@@ -301,6 +301,9 @@ We leave Debian (`exit`) and run the following in regular Termux:
 
 ```sh
 pkg install -y mosquitto
+```
+
+```sh
 mkdir -p ~/.config/mosquitto ~/.local/share/mosquitto
 chmod 700 ~/.config/mosquitto ~/.local/share/mosquitto
 mosquitto_passwd -c ~/.config/mosquitto/passwd homeassistant
