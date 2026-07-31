@@ -36,7 +36,7 @@ We do not run `apt` in Termux or `pkg` in Debian. When a command is not found, w
 - Before an update, we back up the HA configuration directory and record the versions of `hass`, Python, and installed packages. Updates can break a working setup.
 - We update one layer at a time: Android/ROM → chroot → Debian → HA or ESPHome.
 - For cache cleanup, we use the [script from step 06](06_Termux_Widget.md), not broad deletion of `/tmp` or system directories.
-- Main logs: `$HA_CONFIG_DIR/home-assistant.log`, `~/init.log`, and `/root/esphome.log` in Debian.
+- Main logs: `$HA_CONFIG_DIR/home-assistant.log` (`/mnt/ha_native/home-assistant.log` for SD card or `/root/.homeassistant/home-assistant.log` for internal storage), `~/init.log` (in Termux), and `/root/esphome.log` (in Debian).
 
 ## Personal configuration log
 
