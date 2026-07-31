@@ -21,7 +21,7 @@ A practical record of deploying Home Assistant Core on rooted Android 16 through
 ## Scope and options
 
 - **Without an SD card:** HA configuration is stored in `/root/.homeassistant`.
-- **With an SD card:** `/config` and SQLite are stored on an ext4 card through a bind mount; automatic startup does not start HA until the card is available.
+- **With an SD card:** Home Assistant configuration (`/mnt/ha_native`) and SQLite database are stored on an ext4 card through a bind mount; automatic startup does not start HA until the card is available.
 - **Without Mosquitto:** we skip the MQTT block in step 03 and keep `ENABLE_MOSQUITTO=0` in step 04.
 - **ESPHome:** an independent service from Home Assistant. We can install it after step 03 and leave it stopped until firmware needs to be built.
 
