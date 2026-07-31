@@ -70,13 +70,15 @@ su -c 'cat /proc/partitions; ls -l /dev/block/mmcblk*'
 
 ### A.3. Format only after exact verification
 
-Below, `<SD_DEVICE>` is the verified path without a partition number (for example, `/dev/block/mmcblk1`). We use the path for the actual device. In Debian:
+Below, `<SD_DEVICE>` is the verified path without a partition number (for example, `/dev/block/mmcblk1`). We use the path for the actual device.
+
+**Step 1. Run interactive `parted` in Debian:**
 
 ```sh
 parted /dev/block/mmcblk1
 ```
 
-In interactive `parted`, we run:
+At the interactive `(parted)` prompt, enter each command sequentially:
 
 ```text
 mklabel gpt
@@ -84,14 +86,16 @@ mkpart primary ext4 1MiB 100%
 print
 quit
 ```
-We unmount the card through the file-manager settings or run:
+
+**Step 2. Unmount the device if mounted:**
+In Android file-manager settings or from a Termux root shell:
 
 ```sh
-su
-umount -l /dev/block/mmcblk1*
+su -c 'umount -l /dev/block/mmcblk1*'
 ```
 
-We then create ext4 on the new partition. For example, if `<SD_DEVICE>` is `/dev/block/mmcblk1`, `<SD_PARTITION>` is `/dev/block/mmcblk1p1`; other device types can use a different partition name.
+**Step 3. Create and configure ext4 filesystem:**
+We then create ext4 on the new partition in Debian. For example, if `<SD_DEVICE>` is `/dev/block/mmcblk1`, `<SD_PARTITION>` is `/dev/block/mmcblk1p1`; other device types can use a different partition name. Execute each command sequentially:
 
 ```sh
 # 1. Create an ext4 filesystem with the HA_CONFIG label:
@@ -159,7 +163,7 @@ su -mm -c '/system/bin/chroot-distro command debian "rm -f /mnt/ha_native/.write
 
 #### Optional: migrate an existing HA configuration to the SD card
 
-We perform this migration only when HA was already initialized with its configuration in the Debian root directory, for example when `/data/local/chroot-distro/debian/root/configuration.yaml` and `/data/local/chroot-distro/debian/root/.storage` exist. We stop HA first. The commands below copy the known HA configuration files, state storage, and database to the mounted SD directory without deleting the original files.
+We perform this migration only when HA was already initialized with its configuration in internal storage, for example when `/root/.homeassistant/configuration.yaml` and `/root/.homeassistant/.storage` exist. We stop HA first. The commands below copy the known HA configuration files, state storage, and database from `/root/.homeassistant` to the mounted SD directory (`/mnt/ha_native`) without deleting the original files.
 
 In Termux, we enter Debian through the master mount namespace:
 
@@ -171,9 +175,9 @@ In Debian, we run:
 
 ```sh
 pkill -TERM -f '[s]rv/homeassistant/bin/hass' || true
-cp -a /root/configuration.yaml /root/.storage /mnt/ha_native/
+cp -a /root/.homeassistant/configuration.yaml /root/.homeassistant/.storage /mnt/ha_native/
 for item in automations.yaml scripts.yaml scenes.yaml secrets.yaml custom_components www blueprints packages themes home-assistant_v2.db home-assistant_v2.db-shm home-assistant_v2.db-wal; do
-    [ -e "/root/$item" ] && cp -a "/root/$item" /mnt/ha_native/
+    [ -e "/root/.homeassistant/$item" ] && cp -a "/root/.homeassistant/$item" /mnt/ha_native/
 done
 ls -la /mnt/ha_native
 export UV_LINK_MODE=copy
@@ -199,35 +203,28 @@ At the time of testing, Home Assistant development documentation required Python
 
 In Debian, we run:
 
-# 1. Install the uv package manager
 ```sh
+# 1. Install the uv package manager
 curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
-```
+
 # 2. Install Python and create the virtual environment
-```sh
 uv python install 3.14.6
 uv venv --python 3.14.6 /srv/homeassistant
 source /srv/homeassistant/bin/activate
-```
+
 # 3. Set copy mode for chroot/Android
-```sh
 export UV_LINK_MODE=copy
-```
+
 # 4. Install Home Assistant and base system modules
-```sh
 uv pip install --upgrade homeassistant pip wheel aioesphomeapi zlib-ng isal
-```
+
 # 5. Download constraints for the installed version
-```sh
 HA_VERSION="$(hass --version)"
 curl -fL "https://raw.githubusercontent.com/home-assistant/core/${HA_VERSION}/homeassistant/package_constraints.txt" -o /srv/homeassistant/constraints.txt
 test -s /srv/homeassistant/constraints.txt && export UV_CONSTRAINT=/srv/homeassistant/constraints.txt
-```
 
 # 6. Record the installed package set
-
-```sh
 uv pip freeze > /root/homeassistant-requirements-$(date +%F).txt
 ```
 
@@ -255,9 +252,9 @@ If `test -s /srv/homeassistant/constraints.txt` fails, we stop and check Interne
 
 We choose one of two configuration locations:
 
-**Option 1 — with an SD card.** We use the path to the mounted ext4 partition and replace the sample UUID:
+**Option 1 — with an SD card.** We set the working directory inside Debian to the bind-mounted SD card location:
 ```sh
-export HA_CONFIG_DIR="/mnt/media_rw/24b7606d-01b1-45ca-9202-126624675927/ha_config"
+export HA_CONFIG_DIR="/mnt/ha_native"
 ```
 
 **Option 2 — without an SD card / internal storage.** The following line is intentionally commented; remove only the leading `#` when using this option:
@@ -265,6 +262,19 @@ export HA_CONFIG_DIR="/mnt/media_rw/24b7606d-01b1-45ca-9202-126624675927/ha_conf
 ```sh
 #export HA_CONFIG_DIR="/root/.homeassistant"
 ```
+
+### Common working configuration path (`$HA_CONFIG_DIR`)
+
+All subsequent maintenance and configuration commands in this guide rely on the single common working directory environment variable `$HA_CONFIG_DIR` selected above.
+
+Depending on your installation mode:
+- **Internal Storage (Mode A):** The real configuration directory is `/root/.homeassistant`.
+- **SD Card (Mode B):** The working configuration directory inside Debian is `/mnt/ha_native`.
+
+**Why `/mnt/ha_native` is used for Mode B:**
+Inside the Debian chroot, `/mnt/ha_native` is the active bind mount where the SD card's `ha_config` folder is mounted. This is the exact path used by Home Assistant itself after startup (`hass --config /mnt/ha_native`). Physical host storage at `/mnt/media_rw/<UUID>` exists only in the Android host mount namespace and must **never** be used for normal Home Assistant maintenance or administration inside Debian.
+
+By using `$HA_CONFIG_DIR`, all administration steps—editing `configuration.yaml`, running `check_config`, checking `home-assistant.log`, inspecting SQLite, or performing backups—remain identical regardless of storage mode.
 
 We create the configuration directory:
 ```sh
@@ -290,12 +300,13 @@ source /srv/homeassistant/bin/activate
 hass --script check_config --config "$HA_CONFIG_DIR"
 ```
 
-### To reduce writes to an SD card or internal flash, we edit:
-
-nano "$HA_CONFIG_DIR/configuration.yaml"
+### To reduce writes to an SD card or internal flash, we edit configuration.yaml:
 
 ```sh
-YAML
+nano "$HA_CONFIG_DIR/configuration.yaml"
+```
+
+```yaml
 default_config:
 
 frontend:
@@ -309,7 +320,6 @@ scene: !include scenes.yaml
 recorder:
   commit_interval: 60
   purge_keep_days: 14
-  
 ```
 
 In nano, `Ctrl+O`, then Enter saves; `Ctrl+X` exits.
@@ -397,6 +407,9 @@ hass --script check_config --config "$HA_CONFIG_DIR"
 Main logs:
 
 ```sh
+# Home Assistant log in Debian (uses the common working directory):
+tail -f "$HA_CONFIG_DIR/home-assistant.log"
+
 # In Termux after installing the step 04 script:
 tail -f ~/init.log
 
