@@ -46,7 +46,7 @@ termux-wake-lock
 We check the phone’s local IP address:
 
 ```sh
-su -c ip -brief address
+su -c 'ip -brief address'
 ```
 
 For PC access, we set a password and start the SSH server:
