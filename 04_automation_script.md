@@ -303,7 +303,7 @@ while :; do
 done
 ```
 
-We save the file, set its permissions, and validate syntax without starting services:
+In nano, `Ctrl+O`, then Enter saves; `Ctrl+X` exits. We set its permissions and validate syntax without starting services:
 
 ```sh
 chmod 700 ~/.termux/boot/00-init.sh
@@ -362,11 +362,24 @@ su -c 'mount | grep ha_native'
 su -c '/system/bin/chroot-distro command debian "ls -la /mnt/ha_native"'
 ```
 
+### Integrated logging
+
+The initialization script implements multi-destination logging:
+1. **Local init log:** Writes status and watchdog events to `~/init.log` when `ENABLE_LOCAL_LOG=1` or when an `ERROR` occurs.
+2. **Home Assistant log file:** Directly appends formatted entries into `home-assistant.log` inside the active Home Assistant configuration directory (`/root/.homeassistant/home-assistant.log` or `/mnt/ha_native/home-assistant.log`).
+3. **Home Assistant REST API:** When `HA_TOKEN` is configured, events are transmitted to Home Assistant via the `/api/services/system_log/write` REST endpoint.
+
+Because of this integration, startup script messages and watchdog alerts appear directly inside the Home Assistant UI under **Settings → System → Logs**. This behavior is intentional and provides unified logging; do not disable or remove this integration.
+
 ## Watchdog behavior and limits
 
-- HA gets 60 seconds for its initial start, then is checked at the configured interval (`CHECK_INTERVAL`, 300 seconds by default).
-- After two failed HTTP checks, the script sends HA `SIGTERM` and starts it again.
-- In the shown configuration, phone rebooting is **enabled** (`REBOOT_AFTER_RESTARTS=1`) after two HA restarts. We disable it only deliberately: an automatic reboot can turn a configuration error into a loop.
+The watchdog loop operates according to the precise logic implemented in `00-init.sh`:
+
+- **SD card detection & startup cancellation:** When `USE_SD_CARD=1`, the script waits up to 60 seconds (30 attempts at 2-second intervals) for the physical SD storage (`/mnt/media_rw/$SD_UUID/ha_config`). If the card or directory is not found within 60 seconds, startup is automatically cancelled to prevent Home Assistant from launching with a new empty configuration in internal storage (`/root/.homeassistant`).
+- **Initial grace period:** Home Assistant is allowed an initial grace period of `INITIAL_GRACE_SECONDS` (90 seconds) to complete startup before the watchdog loop begins health checks.
+- **Network loss & skipped health checks:** The script checks whether active Wi-Fi connectivity (`wlan0` default gateway route) is present. If the network interface is down during a watchdog check, health checks are skipped and the `FAILURES` counter is reset to `0` to prevent false positive restarts or reboots while offline.
+- **HTTP health check & restart threshold:** Checks are performed at `CHECK_INTERVAL` (300 seconds by default) using an HTTP GET request to `http://127.0.0.1:8123/`. If Home Assistant fails `MAX_CONSECUTIVE_FAILURES` (2) consecutive HTTP checks, the script sends `SIGTERM` (`stop_ha`), waits 20 seconds, and restarts Home Assistant (`start_ha`), allowing another 90-second grace period.
+- **Reboot threshold:** If `REBOOT_AFTER_RESTARTS=1` and Home Assistant fails again after `MAX_RESTARTS_BEFORE_REBOOT` (2) soft restarts, the script triggers an automatic system reboot (`setprop sys.powerctl reboot`). Disable system reboots only deliberately: an unhandled configuration error could otherwise result in a reboot loop.
 - The script does not replace backups, Android updates, or power management. Android can still kill Termux under severe memory pressure. In practice, this was not reproduced with stress tests, including with `termux-wake-lock` disabled.
 
 To temporarily disable automatic startup, we run:
