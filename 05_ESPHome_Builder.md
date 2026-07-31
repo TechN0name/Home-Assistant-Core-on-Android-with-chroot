@@ -48,7 +48,7 @@ export ESPHOME_PASSWORD="replace-with-your-password"
 exec /srv/esphome/bin/esphome-device-builder "$CONFIG_DIR" --host 0.0.0.0 --port 6052
 ```
 
-We save the file and restrict access because the password is stored in plain text:
+In nano, `Ctrl+O`, then Enter saves; `Ctrl+X` exits. We restrict access because the password is stored in plain text:
 
 ```sh
 chmod 700 /root/start-esphome.sh
