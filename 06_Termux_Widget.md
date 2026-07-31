@@ -33,7 +33,7 @@ CHROOT_BIN="/system/bin/chroot-distro"
 DISTRO="debian"
 
 is_running() {
-    $SU_CMD "$CHROOT_BIN command$DISTRO \"pgrep -f '[e]sphome-device-builder'\"" >/dev/null 2>&1
+    $SU_CMD "$CHROOT_BIN command $DISTRO \"pgrep -f '[e]sphome-device-builder'\"" >/dev/null 2>&1
 }
 
 clear
@@ -42,7 +42,7 @@ echo "=== ESPHome Device Builder ==="
 if is_running; then
     echo "Builder is already running."
 else
-    $SU_CMD "$CHROOT_BIN command$DISTRO \"cd /root && nohup /bin/bash /root/start-esphome.sh > /root/esphome.log 2>&1 &\""
+    $SU_CMD "$CHROOT_BIN command $DISTRO \"cd /root && nohup /bin/bash /root/start-esphome.sh > /root/esphome.log 2>&1 &\""
     sleep 2
 
     if is_running; then
@@ -51,7 +51,7 @@ else
     else
         echo "Failed to start Builder. Error log:"
         echo "----------------------------------------"
-        $SU_CMD "$CHROOT_BIN command$DISTRO \"cat /root/esphome.log 2>/dev/null\""
+        $SU_CMD "$CHROOT_BIN command $DISTRO \"cat /root/esphome.log 2>/dev/null\""
         echo "----------------------------------------"
     fi
 fi
@@ -76,8 +76,8 @@ DISTRO="debian"
 clear
 echo "=== Stopping ESPHome Device Builder ==="
 
-if $SU_CMD "$CHROOT_BIN command$DISTRO \"pgrep -f '[e]sphome-device-builder'\"" >/dev/null 2>&1; then
-    $SU_CMD "$CHROOT_BIN command$DISTRO \"pkill -TERM -f '[e]sphome-device-builder'\""
+if $SU_CMD "$CHROOT_BIN command $DISTRO \"pgrep -f '[e]sphome-device-builder'\"" >/dev/null 2>&1; then
+    $SU_CMD "$CHROOT_BIN command $DISTRO \"pkill -TERM -f '[e]sphome-device-builder'\""
     echo "SIGTERM sent."
 else
     echo "No active Builder found."
@@ -102,7 +102,7 @@ DISTRO="debian"
 
 clear
 echo "=== ESPHome Device Builder: status ==="
-$SU_CMD "$CHROOT_BIN command$DISTRO \"
+$SU_CMD "$CHROOT_BIN command $DISTRO \"
     pgrep -af '[e]sphome-device-builder' || echo 'Builder is not running.'
     echo
     echo '--- Last 50 log lines ---'
