@@ -161,6 +161,18 @@ After the check, we remove the test file:
 su -mm -c '/system/bin/chroot-distro command debian "rm -f /mnt/ha_native/.write-test"'
 ```
 
+> [!WARNING]
+> **Bind mount is volatile.** The bind mount created above (`/mnt/ha_native`) exists only in kernel memory. It disappears when the phone reboots. The step 04 startup script restores it automatically, but **only** after it has been configured and started.
+>
+> If you reboot before completing section C or before step 04 is active, re-run the bind mount in Termux before entering Debian:
+>
+> ```sh
+> export SD_UUID='paste_SD_UUID_here'
+> su -mm -c "mkdir -p /mnt/media_rw/$SD_UUID/ha_config"
+> su -mm -c 'mkdir -p /data/local/chroot-distro/debian/mnt/ha_native'
+> su -mm -c "mount --bind /mnt/media_rw/$SD_UUID/ha_config /data/local/chroot-distro/debian/mnt/ha_native"
+> ```
+
 #### Optional: migrate an existing HA configuration to the SD card
 
 We perform this migration only when HA was already initialized with its configuration in internal storage, for example when `/root/.homeassistant/configuration.yaml` and `/root/.homeassistant/.storage` exist. We stop HA first. The commands below copy the known HA configuration files, state storage, and database from `/root/.homeassistant` to the mounted SD directory (`/mnt/ha_native`) without deleting the original files.
@@ -249,6 +261,19 @@ We do not use `UV_SYSTEM_PYTHON=1` in this project. It breaks venv isolation and
 If `test -s /srv/homeassistant/constraints.txt` fails, we stop and check Internet access and the output of `hass --version`.
 
 ## C. First manual Home Assistant start
+
+### Pre-check: verify the SD card mount (SD card mode only)
+
+If the SD card option was chosen in section A, confirm the bind mount is active before entering Debian. The mount is volatile and does not survive a reboot.
+
+In Termux, run:
+
+```sh
+su -mm -c 'mount | grep ha_native'
+```
+
+- **Output is empty:** the mount is gone (the phone was rebooted). Restore it using the commands in the warning box at the end of section A.5, then continue.
+- **Output contains a bind-mount entry:** the mount is active and Debian can be entered.
 
 We choose one of two configuration locations:
 
