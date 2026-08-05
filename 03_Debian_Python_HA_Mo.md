@@ -129,13 +129,15 @@ We record the actual UUID from the directory name or `blkid`. If `/mnt/media_rw/
 
 ### A.5. Create and verify the HA configuration mount
 
-Once the UUID is known, we run the following in Termux and use the actual UUID. Every command in this subsection uses Magisk’s `-mm` (`--mount-master`) option, so the mount is created and inspected in the global mount namespace. This must match the context used by the step 04 startup script.
+Once the UUID is known, set your actual UUID variable in Termux:
 
 ```sh
-# Set the actual UUID:
-export SD_UUID='paste_SD_UUID_here'
+export SD_UUID="paste_SD_UUID_here"
+```
 
-# Always use the master mount namespace.
+Replace `paste_SD_UUID_here` with your verified UUID. Then execute the directory creation and bind-mount commands using Magisk's `-mm` (`--mount-master`) option to operate in the global mount namespace:
+
+```sh
 # Create the HA configuration directory on the card:
 su -mm -c "mkdir -p /mnt/media_rw/$SD_UUID/ha_config"
 
@@ -358,17 +360,220 @@ hass --script check_config --config "$HA_CONFIG_DIR"
 
 We manually start HA and confirm that the web interface opens after a restart. We do not continue to step 04 until this is confirmed.
 
+## E. Optional: Android hardware sensors via `command_line`
+
+This section adds device-specific sensors that read hardware telemetry directly from the Linux kernel's sysfs interface (`/sys/class/`). All commands run inside the Debian chroot as root, which has access to Android kernel interfaces through the native chroot.
+
+> [!NOTE]
+> These sensors are specific to the Redmi Note 8T (Snapdragon 665) and the tested kernel. The thermal zone indices and sysfs paths may differ on other devices. Before adding a sensor, verify the path exists:
+>
+> ```sh
+> cat /sys/class/power_supply/battery/capacity
+> ```
+>
+> If the file is absent or unreadable, the sensor is not available on this device.
+
+We edit `configuration.yaml` and add a `command_line:` block. If `command_line:` already exists in the file, we append the new entries under the existing key; we do not add the key twice.
+
+```sh
+nano "$HA_CONFIG_DIR/configuration.yaml"
+```
+
+```yaml
+command_line:
+
+  # --- Temperature sensors ---
+
+  - sensor:
+      name: "RN8T CPU Temperature"
+      unique_id: rn8t_cpu_temperature
+      # Dynamically resolves the thermal zone index for the primary CPU cluster.
+      # The grep finds the zone whose type file contains 'cpuss-0-usr'.
+      command: "cat /sys/class/thermal/thermal_zone$(grep -l 'cpuss-0-usr' /sys/class/thermal/thermal_zone*/type | grep -oE '[0-9]+')/temp"
+      unit_of_measurement: "°C"
+      device_class: temperature
+      state_class: measurement
+      # The kernel reports temperature in millidegrees Celsius; divide by 1000.
+      value_template: "{{ (value | float / 1000) | round(1) }}"
+      scan_interval: 30
+
+  - sensor:
+      name: "RN8T Battery Temperature"
+      unique_id: rn8t_battery_temperature
+      command: "cat /sys/class/power_supply/battery/temp"
+      unit_of_measurement: "°C"
+      device_class: temperature
+      state_class: measurement
+      # The battery driver reports temperature in tenths of a degree; divide by 10.
+      value_template: "{{ (value | float / 10) | round(1) }}"
+      scan_interval: 30
+
+  - sensor:
+      name: "RN8T eMMC Temperature"
+      unique_id: rn8t_emmc_temperature
+      # Dynamically resolves the thermal zone index for the eMMC/UFS sensor.
+      command: "cat /sys/class/thermal/thermal_zone$(grep -l 'emmc-ufs-therm-adc' /sys/class/thermal/thermal_zone*/type | grep -oE '[0-9]+')/temp"
+      unit_of_measurement: "°C"
+      device_class: temperature
+      state_class: measurement
+      value_template: "{{ (value | float / 1000) | round(1) }}"
+      # Storage temperature changes slowly; 60-second polling is sufficient.
+      scan_interval: 60
+
+  # --- Battery and power sensors ---
+
+  - sensor:
+      name: "RN8T Battery Level"
+      unique_id: rn8t_battery_level
+      command: "cat /sys/class/power_supply/battery/capacity"
+      unit_of_measurement: "%"
+      device_class: battery
+      state_class: measurement
+      value_template: "{{ value | int }}"
+      # If the charging limit is set to 70 % (step 02), this value stabilises at 70.
+      scan_interval: 60
+
+  - sensor:
+      name: "RN8T Battery Current"
+      unique_id: rn8t_battery_current
+      command: "cat /sys/class/power_supply/battery/current_now"
+      unit_of_measurement: "mA"
+      device_class: current
+      state_class: measurement
+      # The Qualcomm driver reports current in microamperes (µA); divide by 1000 for mA.
+      # Positive values indicate charging; negative values indicate discharge (consumption).
+      value_template: "{{ (value | float / 1000) | round(1) }}"
+      # Short interval for accurate charge/discharge graphs.
+      scan_interval: 10
+
+  - sensor:
+      name: "RN8T Battery Cycle Count"
+      unique_id: rn8t_battery_cycle_count
+      command: "cat /sys/class/power_supply/battery/cycle_count"
+      icon: mdi:battery-sync
+      # total_increasing: the value only grows over the battery's lifetime.
+      state_class: total_increasing
+      value_template: "{{ value | int }}"
+      # Cycle count changes rarely; hourly polling avoids unnecessary writes.
+      scan_interval: 3600
+```
+
+In nano, `Ctrl+O`, then Enter saves; `Ctrl+X` exits.
+
+> [!IMPORTANT]
+> **Full Home Assistant Restart Required:**
+> Adding new `command_line` sensors or changing existing sensor unique IDs requires a **full Home Assistant restart** (**Settings → System → Restart** or restarting the service). Reloading YAML configuration alone is insufficient for newly added entities to appear in Home Assistant.
+
+We validate the configuration before restarting:
+
+```sh
+hass --script check_config --config "$HA_CONFIG_DIR"
+```
+
+After a successful check, we restart Home Assistant. The sensors appear under **Settings → Devices & services → Entities** with the names defined above.
+
+> [!NOTE]
+> The dynamic thermal zone lookup (`grep -l … | grep -oE '[0-9]+'`) resolves the correct zone index at every poll. If two thermal zones match the same type string on a different kernel, the command returns multiple lines and the sensor reports an error. In that case, identify the correct fixed index with `grep -r 'cpuss-0-usr' /sys/class/thermal/` and replace the dynamic command with a hardcoded path such as `cat /sys/class/thermal/thermal_zone4/temp`.
+
+### E.2. Optional: Advanced system and resource monitoring
+
+The optional sensors below provide useful system telemetry for Home Assistant running on Android devices. Add these entries under the `command_line:` section in `configuration.yaml`:
+
+```yaml
+command_line:
+
+  # --- Advanced system and resource monitoring (Optional) ---
+
+  - sensor:
+      name: "RN8T Available RAM"
+      unique_id: rn8t_available_ram
+      command: "awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo"
+      unit_of_measurement: "MB"
+      device_class: data_size
+      state_class: measurement
+      value_template: "{{ value | int }}"
+      scan_interval: 30
+
+  - sensor:
+      name: "RN8T CPU Load (1m)"
+      unique_id: rn8t_cpu_load_1m
+      command: "cat /proc/loadavg | awk '{print $1}'"
+      icon: mdi:chip
+      state_class: measurement
+      value_template: "{{ value | float | round(2) }}"
+      scan_interval: 15
+
+  - sensor:
+      name: "RN8T CPU Frequency"
+      unique_id: rn8t_cpu_frequency
+      command: "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo 0"
+      unit_of_measurement: "MHz"
+      state_class: measurement
+      value_template: "{{ (value | float / 1000) | round(0) | int }}"
+      scan_interval: 15
+
+  - sensor:
+      name: "RN8T Internal Storage Free"
+      unique_id: rn8t_internal_storage_free
+      command: "df -m /data | awk 'NR==2 {print $4}'"
+      unit_of_measurement: "MB"
+      device_class: data_size
+      state_class: measurement
+      value_template: "{{ value | int }}"
+      scan_interval: 300
+
+  - sensor:
+      name: "RN8T HA Database Size"
+      unique_id: rn8t_ha_database_size
+      command: "[ -f /mnt/ha_native/home-assistant_v2.db ] && du -m /mnt/ha_native/home-assistant_v2.db | awk '{print $1}' || du -m /root/.homeassistant/home-assistant_v2.db 2>/dev/null | awk '{print $1}'"
+      unit_of_measurement: "MB"
+      device_class: data_size
+      state_class: measurement
+      value_template: "{{ value | int }}"
+      scan_interval: 300
+
+  - sensor:
+      name: "RN8T Storage Mount Status"
+      unique_id: rn8t_storage_mount_status
+      command: "mountpoint -q /mnt/ha_native && echo 'Mounted (SD)' || echo 'Internal Storage'"
+      icon: mdi:harddisk
+      scan_interval: 60
+
+  - sensor:
+      name: "RN8T System Uptime"
+      unique_id: rn8t_system_uptime
+      command: "cat /proc/uptime | awk '{print int($1)}'"
+      unit_of_measurement: "s"
+      device_class: duration
+      state_class: total_increasing
+      value_template: "{{ value | int }}"
+      scan_interval: 60
+```
+
+> [!NOTE]
+> Hardware support and sysfs file paths vary by Android device model and kernel build. For example, CPU frequency exposure depends on kernel `cpufreq` drivers. If any sensor returns an unreadable value or error, test the underlying command in the Debian chroot terminal before adding it to `configuration.yaml`. Remember that adding new sensors requires a full Home Assistant restart.
+
 ## D. Optional: local Mosquitto in Termux
 
 We use this section only when a **local MQTT broker** is required. If HA connects to an existing network broker or MQTT is not used, we skip it.
 
-We leave Debian (`exit`) and run the following in regular Termux:
+First, install Mosquitto and create configuration directories:
 
 ```sh
 pkg install -y mosquitto
 mkdir -p ~/.config/mosquitto ~/.local/share/mosquitto
 chmod 700 ~/.config/mosquitto ~/.local/share/mosquitto
+```
+
+Next, interactively create a password file for the `homeassistant` user:
+
+```sh
 mosquitto_passwd -c ~/.config/mosquitto/passwd homeassistant
+```
+
+Enter and confirm your password when prompted. Then edit the configuration file:
+
+```sh
 nano ~/.config/mosquitto/mosquitto.conf
 ```
 
