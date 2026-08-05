@@ -7,11 +7,13 @@ This step installs **[ESPHome Device Builder](https://github.com/esphome/device-
 
 ## 1. Create an isolated environment
 
-We enter Debian:
+In Termux, enter Debian as root:
 
 ```sh
 su -c '/system/bin/chroot-distro login debian'
 ```
+
+Inside the Debian chroot, create the environment and install ESPHome Device Builder:
 
 ```sh
 mkdir -p /srv/esphome/config
@@ -25,7 +27,7 @@ If the help text appears without errors, we create `/root/start-esphome.sh` and 
 
 ## 2. Create the startup script
 
-In Debian, we create the script:
+In Debian, open `nano` to create the startup script:
 
 ```sh
 nano /root/start-esphome.sh
@@ -59,13 +61,13 @@ chmod 700 /root/start-esphome.sh
 
 ## 3. Start and verify
 
-In Debian, we run:
+In Debian, run the startup script in the foreground to verify functionality:
 
 ```sh
 /root/start-esphome.sh
 ```
 
-After startup, Builder is available on the local network at `http://<phone_IP>:6052`. We stop the foreground process with `Ctrl+C` in Termux.
+After startup, Builder is available on the local network at `http://<phone_IP>:6052`. After verifying access in a browser, stop the foreground process by pressing `Ctrl+C` in the terminal.
 
 Builder does not need to run continuously. Step [06](06_Termux_Widget.md) provides manual buttons for starting, stopping, viewing logs, and clearing caches.
 
