@@ -20,8 +20,13 @@ The `chroot-distro` path must match step 02. If the path differs, we change only
 
 ### Start ESPHome Device Builder
 
-We create:
-`nano ~/.shortcuts/esphome-start.sh`:
+Open `nano` to create `~/.shortcuts/esphome-start.sh`:
+
+```sh
+nano ~/.shortcuts/esphome-start.sh
+```
+
+Paste the following script content:
 
 ```sh
 #!/data/data/com.termux/files/usr/bin/sh
@@ -61,8 +66,13 @@ read -r -p "Press Enter to exit..." _
 
 ### Stop ESPHome Device Builder
 
-We create:
-`nano ~/.shortcuts/esphome-stop.sh`:
+Open `nano` to create `~/.shortcuts/esphome-stop.sh`:
+
+```sh
+nano ~/.shortcuts/esphome-stop.sh
+```
+
+Paste the following script content:
 
 ```sh
 #!/data/data/com.termux/files/usr/bin/sh
@@ -88,8 +98,13 @@ read -r -p "Press Enter to exit..." _
 
 ### View status and log
 
-We create:
-`nano ~/.shortcuts/esphome-status.sh`:
+Open `nano` to create `~/.shortcuts/esphome-status.sh`:
+
+```sh
+nano ~/.shortcuts/esphome-status.sh
+```
+
+Paste the following script content:
 
 ```sh
 #!/data/data/com.termux/files/usr/bin/sh
