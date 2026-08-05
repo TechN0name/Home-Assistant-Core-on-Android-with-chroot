@@ -51,28 +51,47 @@ After an installation, we record the following in an issue or README:
 
 For the Xiaomi Redmi Note 8T, we use the [official builds](https://download.lineageos.org/devices/ginkgo/builds) and follow the [official installation guide](https://wiki.lineageos.org/devices/ginkgo/install/variant2/).
 
-The summary below is intentionally abbreviated. We enter Fastboot mode by holding **Volume Down + Power**, then run the following from the `flashing` directory on the PC:
+The summary below is intentionally abbreviated. We enter Fastboot mode by holding **Volume Down + Power**, then open a command prompt or terminal in the `flashing` directory on the PC.
+
+First, verify that Fastboot detects the device:
 
 ```sh
 cd C:\flashing 
 fastboot devices
+```
+
+If the device is listed, flash the partition images:
+
+```sh
 fastboot flash vbmeta vbmeta.img
 fastboot flash dtbo dtbo.img
 fastboot flash boot boot.img
 fastboot flash recovery recovery.img
 ```
 
-In Lineage Recovery, we select **Apply update → Apply from ADB**; the screen shows “Now send the package…”. We then check the ADB connection from the PC:
+In Lineage Recovery, we select **Apply update → Apply from ADB** (the screen displays “Now send the package…”). We then check the ADB connection from the PC:
 
 ```sh
 adb devices
 ```
 
-We obtain firmware for the exact phone model separately, then sideload the files:
+Firmware, ROM, and root packages must be sideloaded sequentially. Each sideload requires selecting **Apply update → Apply from ADB** in Lineage Recovery before executing the corresponding `adb sideload` command on the PC:
+
+1. In recovery, select **Apply update → Apply from ADB**, then run:
 
 ```sh
 adb sideload fw.zip
+```
+
+2. After sideloading completes, select **Apply update → Apply from ADB** again, then run:
+
+```sh
 adb sideload lineage.zip
+```
+
+3. Select **Apply update → Apply from ADB** once more, then run:
+
+```sh
 adb sideload magisk.zip
 ```
 
