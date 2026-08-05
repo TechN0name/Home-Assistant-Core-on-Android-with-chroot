@@ -49,10 +49,15 @@ We check the phone’s local IP address:
 su -c 'ip -brief address'
 ```
 
-For PC access, we set a password and start the SSH server:
+For PC access, set a user password interactively first:
 
 ```sh
 passwd
+```
+
+After entering and confirming the password, start the SSH server:
+
+```sh
 sshd
 ```
 
@@ -107,6 +112,14 @@ For an optional interactive check, we enter Debian with:
 ```sh
 su -c '/system/bin/chroot-distro login debian'
 ```
+
+> [!NOTE]
+> **Understanding Shell Contexts:**
+> - **Regular Termux shell (`$` prompt):** Commands run as the unprivileged Termux user on Android.
+> - **Termux root shell (`#` prompt via `su`):** Commands run as Android `root`.
+> - **Debian chroot shell (`root@localhost:~#` prompt via `login debian`):** Commands run inside the Debian Linux environment as `root`.
+>
+> When editing files with `nano` in any shell: press `Ctrl+O`, then `Enter` to save changes; press `Ctrl+X` to exit the editor.
 
 We leave the session with `exit`. In the rest of this guide, “in Debian” means this root session.
 
