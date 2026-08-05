@@ -6,10 +6,15 @@ Termux:Boot runs files from `~/.termux/boot/` alphabetically after a reboot, pro
 
 ## 1. Create the script
 
-In regular Termux (not in Debian or a `su` shell), we run:
+In regular Termux (not in Debian or a `su` shell), create the boot directory:
 
 ```sh
 mkdir -p ~/.termux/boot
+```
+
+Then open the initialization script in `nano`:
+
+```sh
 nano ~/.termux/boot/00-init.sh
 ```
 
